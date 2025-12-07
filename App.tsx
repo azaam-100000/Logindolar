@@ -9,12 +9,19 @@ import { Terminal, Database, Code } from 'lucide-react';
 const App: React.FC = () => {
   // --- State ---
   const [config, setConfig] = useState<RegistrationConfig>({
-    targetUrl: 'https://zaminer.cc/api/register', // Updated to a more likely API endpoint structure
+    targetUrl: 'https://zaminer.cc/api/register', 
     count: 50,
     inviteCode: '',
-    delayMs: 1500, // Increased default delay to avoid rate limits
+    delayMs: 2000, 
     useMockMode: false,
-    useProxy: true, // Default to true to help users bypass CORS immediately
+    useProxy: true,
+    contentType: 'json',
+    fieldMapping: {
+        email: 'email',
+        password: 'password',
+        confirmPassword: 'password_confirmation',
+        inviteCode: 'invite_code'
+    }
   });
 
   const [isRunning, setIsRunning] = useState(false);
@@ -36,7 +43,7 @@ const App: React.FC = () => {
     setLogs([]); // Clear previous logs
     abortControllerRef.current = new AbortController();
 
-    const { count, targetUrl, inviteCode, delayMs, useMockMode, useProxy } = config;
+    const { count, targetUrl, inviteCode, delayMs, useMockMode, useProxy, contentType, fieldMapping } = config;
 
     for (let i = 0; i < count; i++) {
       if (abortControllerRef.current.signal.aborted) {
@@ -72,31 +79,60 @@ const App: React.FC = () => {
             if(!success) msg = "خطأ عشوائي (محاكاة)";
         } else {
             // Real Network Request
-            const payload = {
-                email: email,
-                password: password,
-                password_confirmation: password, // Common field name
-                invite_code: inviteCode || undefined, // Send if exists
+            
+            // Construct Payload dynamically based on field mappings
+            const payloadObj: Record<string, string> = {
+                [fieldMapping.email]: email,
+                [fieldMapping.password]: password,
+                [fieldMapping.confirmPassword]: password,
             };
 
+            if (inviteCode) {
+                payloadObj[fieldMapping.inviteCode] = inviteCode;
+            }
+
+            // Prepare Request Options based on Content Type
+            let body: string | URLSearchParams;
+            const headers: HeadersInit = {
+                 'Accept': 'application/json, text/plain, */*',
+            };
+
+            if (contentType === 'json') {
+                headers['Content-Type'] = 'application/json';
+                body = JSON.stringify(payloadObj);
+            } else {
+                headers['Content-Type'] = 'application/x-www-form-urlencoded';
+                const params = new URLSearchParams();
+                Object.entries(payloadObj).forEach(([key, value]) => params.append(key, value));
+                body = params; // fetch handles .toString() automatically for URLSearchParams
+            }
+
             // Prepare URL with Proxy if enabled
-            // Using corsproxy.io as a stable public proxy for POST requests
             const finalUrl = useProxy 
                 ? `https://corsproxy.io/?${encodeURIComponent(targetUrl)}` 
                 : targetUrl;
 
             const response = await fetch(finalUrl, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify(payload),
+                headers: headers,
+                body: body,
                 signal: abortControllerRef.current.signal,
             });
 
             if (response.ok) {
                 success = true;
+                // Optional: Check if response body actually implies success (sometimes 200 OK contains "status": "error")
+                try {
+                     const text = await response.text();
+                     const data = JSON.parse(text);
+                     if (data.status === 'error' || data.success === false) {
+                        success = false;
+                        msg = data.message || 'رد السيرفر يشير إلى خطأ';
+                     }
+                } catch (e) {
+                    // Ignore parsing error for success cases if not JSON
+                }
+
             } else {
                 success = false;
                 msg = `خطأ HTTP: ${response.status}`;
@@ -105,12 +141,19 @@ const App: React.FC = () => {
                     const text = await response.text();
                     try {
                         const errData = JSON.parse(text);
+                        // Try common error field names
                         if(errData.message) msg = errData.message;
                         else if(errData.error) msg = errData.error;
-                        else msg = text.substring(0, 50) + '...'; // Show snippet of response
+                        else if(errData.errors) msg = JSON.stringify(errData.errors);
+                        else msg = text.substring(0, 50) + '...'; 
                     } catch {
-                        // Response wasn't JSON (likely HTML error page)
-                         msg = `خطأ ${response.status}: استجابة غير متوقعة (HTML)`;
+                        // Response wasn't JSON
+                        // Check if it's a Cloudflare block or similar
+                        if (text.includes('Cloudflare') || text.includes('captcha')) {
+                             msg = 'تم الحظر بواسطة Cloudflare (حماية)';
+                        } else {
+                             msg = `خطأ ${response.status}: استجابة غير متوقعة`;
+                        }
                     }
                 } catch(e) {}
             }

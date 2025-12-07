@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { RegistrationConfig } from '../types';
-import { Play, Loader2, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Play, Loader2, AlertTriangle, ShieldCheck, Settings, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface ControlPanelProps {
   config: RegistrationConfig;
@@ -17,11 +17,26 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   onStart,
   onStop,
 }) => {
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
+
     onConfigChange({
       ...config,
       [name]: type === 'checkbox' ? checked : type === 'number' ? Number(value) : value,
+    });
+  };
+
+  const handleFieldMappingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    onConfigChange({
+      ...config,
+      fieldMapping: {
+        ...config.fieldMapping,
+        [name]: value,
+      },
     });
   };
 
@@ -32,7 +47,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         {/* Target URL */}
         <div className="lg:col-span-2">
           <label className="block text-sm font-medium text-slate-400 mb-2">
-            رابط الـ API (وليس صفحة الويب)
+            رابط الـ API (endpoint)
           </label>
           <input
             type="text"
@@ -46,7 +61,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           />
           <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
              <AlertTriangle size={12} className="text-amber-500"/>
-             تأكد أن الرابط هو Endpoint (POST) وليس رابط الصفحة الرئيسية.
+             تأكد أن الرابط هو رابط الـ POST Request وليس رابط الصفحة.
           </p>
         </div>
 
@@ -161,6 +176,93 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 </div>
              </label>
           </div>
+      </div>
+
+      {/* Advanced Settings Toggle */}
+      <div className="mt-6 border-t border-slate-800 pt-4">
+        <button 
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="flex items-center gap-2 text-slate-400 hover:text-white text-sm font-medium transition-colors"
+        >
+            <Settings size={16} />
+            إعدادات متقدمة (تخصيص الحقول والنوع)
+            {showAdvanced ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+
+        {/* Advanced Settings Content */}
+        {showAdvanced && (
+            <div className="mt-4 p-4 bg-slate-950/50 rounded-lg border border-slate-800 animate-in fade-in slide-in-from-top-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-2 uppercase tracking-wider">
+                           نوع الطلب (Content-Type)
+                        </label>
+                        <select
+                            name="contentType"
+                            // @ts-ignore
+                            value={config.contentType}
+                            onChange={handleChange}
+                            disabled={isRunning}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-primary-600 outline-none"
+                        >
+                            <option value="json">JSON (application/json)</option>
+                            <option value="form-data">Form Data (application/x-www-form-urlencoded)</option>
+                        </select>
+                        <p className="text-[10px] text-slate-500 mt-1">
+                            معظم المواقع الحديثة تستخدم JSON. المواقع القديمة تستخدم Form Data.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="mt-4">
+                    <label className="block text-xs font-medium text-slate-500 mb-3 uppercase tracking-wider">
+                        أسماء الحقول (Keys) كما يطلبها السيرفر
+                    </label>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4" dir="ltr">
+                        <div>
+                            <span className="block text-xs text-slate-400 mb-1">Email Key</span>
+                            <input
+                                type="text"
+                                name="email"
+                                value={config.fieldMapping.email}
+                                onChange={handleFieldMappingChange}
+                                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm font-mono text-emerald-400"
+                            />
+                        </div>
+                        <div>
+                            <span className="block text-xs text-slate-400 mb-1">Password Key</span>
+                            <input
+                                type="text"
+                                name="password"
+                                value={config.fieldMapping.password}
+                                onChange={handleFieldMappingChange}
+                                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm font-mono text-emerald-400"
+                            />
+                        </div>
+                        <div>
+                            <span className="block text-xs text-slate-400 mb-1">Confirm PWD Key</span>
+                            <input
+                                type="text"
+                                name="confirmPassword"
+                                value={config.fieldMapping.confirmPassword}
+                                onChange={handleFieldMappingChange}
+                                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm font-mono text-emerald-400"
+                            />
+                        </div>
+                        <div>
+                            <span className="block text-xs text-slate-400 mb-1">Invite Code Key</span>
+                            <input
+                                type="text"
+                                name="inviteCode"
+                                value={config.fieldMapping.inviteCode}
+                                onChange={handleFieldMappingChange}
+                                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm font-mono text-emerald-400"
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
       </div>
     </div>
   );
