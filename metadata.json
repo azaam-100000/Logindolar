@@ -1,0 +1,5 @@
+{
+  "name": "AutoRegistrar",
+  "description": "A client-side automation tool for bulk account generation and registration testing.",
+  "requestFramePermissions": []
+}
